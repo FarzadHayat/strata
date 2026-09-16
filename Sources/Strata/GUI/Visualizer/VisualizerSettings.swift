@@ -41,7 +41,12 @@ final class VisualizerSettings {
     @ObservationIgnored private let defaults: UserDefaults
 
     var enabled: Bool { didSet { defaults.set(enabled, forKey: Key.enabled) } }
-    var corner: VisualizerCorner { didSet { defaults.set(corner.rawValue, forKey: Key.corner) } }
+    var corner: VisualizerCorner {
+        didSet {
+            defaults.set(corner.rawValue, forKey: Key.corner)
+            if oldValue != corner { customFrame = nil }
+        }
+    }
     var clickThrough: Bool { didSet { defaults.set(clickThrough, forKey: Key.clickThrough) } }
     /// Panel alpha, `opacityRange`.
     var opacity: Double { didSet { defaults.set(opacity, forKey: Key.opacity) } }

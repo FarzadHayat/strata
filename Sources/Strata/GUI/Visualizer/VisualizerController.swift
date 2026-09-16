@@ -20,6 +20,7 @@ final class VisualizerController: NSObject, NSWindowDelegate {
     private var screenObserver: NSObjectProtocol?
     /// Suppresses `windowDidMove` while we position the panel ourselves.
     private var isProgrammaticMove = false
+    private static let snapEpsilon: CGFloat = 4
 
     init(model: AppModel) {
         self.model = model
@@ -108,25 +109,45 @@ final class VisualizerController: NSObject, NSWindowDelegate {
     private func layout() {
         guard let panel else { return }
         let size = VisualizerView.size(forWidth: settings.width)
-        var origin = cornerOrigin(for: size)
+        let screen = placementScreen(preferredFrame: settings.customFrame)
+        var origin = cornerOrigin(for: size, on: screen)
         if let custom = settings.customFrame {
             let candidate = CGRect(origin: custom.origin, size: size)
             if NSScreen.screens.contains(where: { $0.visibleFrame.intersects(candidate) }) { origin = custom.origin }
         }
         let frame = CGRect(origin: origin, size: size)
-        guard panel.frame != frame else { return }
+        guard !framesEqual(panel.frame, frame) else { return }
         isProgrammaticMove = true
         panel.setFrame(frame, display: true)
         isProgrammaticMove = false
     }
 
-    private func cornerOrigin(for size: CGSize) -> CGPoint {
-        guard let screen = NSScreen.main ?? NSScreen.screens.first else { return .zero }
+    private func placementScreen(preferredFrame: CGRect?) -> NSScreen? {
+        if let preferredFrame,
+           let match = NSScreen.screens.first(where: { $0.frame.intersects(preferredFrame) }) {
+            return match
+        }
+        return NSScreen.main ?? NSScreen.screens.first
+    }
+
+    private func cornerOrigin(for size: CGSize, on screen: NSScreen?) -> CGPoint {
+        guard let screen else { return .zero }
         let area = screen.visibleFrame
         let m = Self.margin
         let x = settings.corner.isLeft ? area.minX + m : area.maxX - m - size.width
         let y = settings.corner.isTop ? area.maxY - m - size.height : area.minY + m
         return CGPoint(x: x, y: y)
+    }
+
+    private func isSnappedToCorner(_ frame: CGRect) -> Bool {
+        let snapped = cornerOrigin(for: frame.size, on: placementScreen(preferredFrame: frame))
+        return abs(frame.origin.x - snapped.x) <= Self.snapEpsilon
+            && abs(frame.origin.y - snapped.y) <= Self.snapEpsilon
+    }
+
+    private func framesEqual(_ a: CGRect, _ b: CGRect) -> Bool {
+        abs(a.origin.x - b.origin.x) <= 0.5 && abs(a.origin.y - b.origin.y) <= 0.5
+            && abs(a.size.width - b.size.width) <= 0.5 && abs(a.size.height - b.size.height) <= 0.5
     }
 
     // MARK: - NSWindowDelegate
@@ -139,12 +160,21 @@ final class VisualizerController: NSObject, NSWindowDelegate {
     func windowDidEndLiveResize(_ notification: Notification) {
         guard let panel else { return }
         settings.width = VisualizerSettings.widthRange.clamping(panel.frame.width)
-        if settings.customFrame != nil { settings.customFrame = panel.frame }
+        rememberFrame(panel.frame)
     }
 
     /// A drag by the user: remember the position instead of the corner.
     func windowDidMove(_ notification: Notification) {
         guard let panel, !isProgrammaticMove, !panel.inLiveResize else { return }
-        if settings.customFrame != panel.frame { settings.customFrame = panel.frame }
+        rememberFrame(panel.frame)
+    }
+
+    /// Persist a free-floating origin; clear it when the panel is still snapped to `corner`.
+    private func rememberFrame(_ frame: CGRect) {
+        if isSnappedToCorner(frame) {
+            if settings.customFrame != nil { settings.customFrame = nil }
+        } else if settings.customFrame != frame {
+            settings.customFrame = frame
+        }
     }
 }

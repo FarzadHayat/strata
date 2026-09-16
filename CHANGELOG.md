@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.1 — 2026-09-17
+- Visualizer: corner picker snaps correctly again (clears stale dragged position; do not persist corner-snapped frames).
+- Visualizer: **Size** slider in menu bar options (260–720 pt); edge drag still works when click-through is off.
+
 ## 0.2.0 — 2026-09-16
 - On-screen keyboard visualizer: floating always-on-top panel (corner, opacity, click-through settings) that shows the
   active layer, effective per-key bindings and live key presses. Key events are streamed over IPC only while it is shown

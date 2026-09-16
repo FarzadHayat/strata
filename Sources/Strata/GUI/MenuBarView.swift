@@ -165,6 +165,12 @@ struct VisualizerOptions: View {
                 ForEach(VisualizerCorner.allCases) { Text($0.title).tag($0) }
             }
             HStack {
+                Text("Size")
+                Slider(value: $settings.width, in: VisualizerSettings.widthRange)
+                Text(settings.width, format: .number.precision(.fractionLength(0)))
+                    .monospacedDigit().foregroundStyle(.secondary).frame(width: 34, alignment: .trailing)
+            }
+            HStack {
                 Text("Opacity")
                 Slider(value: $settings.opacity, in: VisualizerSettings.opacityRange)
                 Text(settings.opacity, format: .percent.precision(.fractionLength(0)))
