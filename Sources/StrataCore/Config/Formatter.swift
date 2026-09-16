@@ -51,7 +51,7 @@ public enum Formatter {
                 if let trivia = preservedTrivia[p] {
                     // Keep the comment; re-indent the token if the comment ended its line.
                     if j == 0, let nl = trivia.lastIndex(of: "\n") {
-                        out += trivia[...nl] + layout.indent + token
+                        out += String(trivia[...nl]) + layout.indent + token
                     } else {
                         out += trivia + token
                     }
