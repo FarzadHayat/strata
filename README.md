@@ -12,7 +12,8 @@ Keyboard Entry.
   fn+F1 is still F1, the Globe key still opens emoji.
 - **One human-readable config file** (`~/.config/strata/keymap.kbd`) you can edit by hand *or* in the visual
   editor — GUI edits are lossless (your comments and alignment survive). Changes apply within ~100 ms.
-- **Single-command install**, permission prompts on first launch, starts at login, no Xcode needed to build.
+- **Live visualizer**: an always-on-top corner panel showing the active layer, per-key bindings and key presses.
+- **Single-command install**, permission prompts on first launch, starts at login.
 
 <!-- screenshot: docs/editor.png -->
 
@@ -137,6 +138,15 @@ the physical key with *Select by pressing*), and choose what it should do in the
 layer, a tap-hold, an alias, transparent or blocked. Every change is written straight into your `.kbd` file as
 a minimal edit and the daemon reloads it instantly; the status bar tells you if the daemon rejected it. The menu
 bar shows the active layer name live while you hold a layer key.
+
+## The visualizer
+
+Menu bar → **Show keyboard visualizer** puts a small translucent keyboard in a corner of the screen, above every
+other window (including full-screen apps). It highlights the keys you press as you press them, relabels every key
+with what it does on the *currently active* layer (hold Caps and the home row turns into arrows), and shows the
+active layer name. Handy while learning a layout or debugging a keymap. Options: corner, opacity, click-through,
+drag it anywhere ("Reset position" snaps it back). Key events are only streamed to the GUI while the visualizer is
+visible.
 
 ## How it works (and why)
 

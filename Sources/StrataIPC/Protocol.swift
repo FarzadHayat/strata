@@ -19,6 +19,9 @@ public enum IPC {
         case cancelLearn
         /// The GUI's view of the TCC state (the daemon cannot prompt, but it can display what the GUI found).
         case permissions(PermissionSnapshot)
+        /// Stream physical key transitions (`Event.key`) — used by the on-screen visualizer. Off by default:
+        /// nothing key-related leaves the daemon unless a client asks for it.
+        case subscribeKeys(Bool)
     }
 
     /// Daemon → GUI.
@@ -27,6 +30,9 @@ public enum IPC {
         case layer(active: [String])
         case learned(key: String, page: UInt16, usage: UInt16)
         case log(String)
+        /// A physical key went down/up (only while a client subscribed with `subscribeKeys(true)`).
+        /// `position` is the `defsrc` index when the key is in the keymap.
+        case key(name: String, page: UInt16, usage: UInt16, down: Bool, position: Int?)
     }
 
     public struct PermissionSnapshot: Codable, Sendable, Equatable {

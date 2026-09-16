@@ -2,7 +2,7 @@ import Foundation
 import StrataCore
 import StrataIPC
 
-/// `strata status [--json] [--watch]` — ask the running daemon for its status over the per-user IPC socket.
+/// `strata status [--json] [--watch] [--keys]` — ask the running daemon for its status over the per-user IPC socket.
 enum StatusCommand {
     static func run(args: [String]) -> Int32 {
         let json = args.contains("--json")
@@ -17,9 +17,13 @@ enum StatusCommand {
             case .layer(let names): if watch { print("layer: \(names.joined(separator: " > "))") }
             case .learned(let key, _, _): if watch { print("learned: \(key)") }
             case .log(let s): if watch { print("log: \(s)") }
+            case .key(let name, _, _, let down, let pos): if watch { print("key: \(name) \(down ? "down" : "up")\(pos.map { " @\($0)" } ?? "")") }
             }
         })
         client.start()
+        if watch, args.contains("--keys") {
+            DispatchQueue.global().asyncAfter(deadline: .now() + 0.5) { client.send(.subscribeKeys(true)) }
+        }
         if !watch {
             DispatchQueue.global().asyncAfter(deadline: .now() + 3) {
                 FileHandle.standardError.write("no answer from the Strata daemon at \(IPC.socketPath(uid: getuid())) — is it running? (sudo launchctl print system/dev.farzadhayat.strata.daemon)\n".data(using: .utf8)!)

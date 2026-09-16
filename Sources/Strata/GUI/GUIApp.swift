@@ -11,6 +11,7 @@ struct GUIApp: App {
         let model = AppModel()
         model.start()
         _model = State(initialValue: model)
+        GUIAppDelegate.launchModel = model
     }
 
     var body: some Scene {
@@ -56,6 +57,10 @@ struct MenuBarLabel: View {
 
 @MainActor
 final class GUIAppDelegate: NSObject, NSApplicationDelegate {
+    /// Set by `GUIApp.init` so the delegate can hand the model to AppKit-managed windows after launch.
+    static var launchModel: AppModel?
+    private var visualizer: VisualizerController?
+
     func applicationWillFinishLaunching(_ notification: Notification) {
         // Menu bar only: no Dock icon, no app menu, whether launched as Strata.app (LSUIElement) or bare.
         NSApp.setActivationPolicy(.accessory)
@@ -66,6 +71,11 @@ final class GUIAppDelegate: NSObject, NSApplicationDelegate {
         if !problems.isEmpty {
             FileHandle.standardError.write(Data(("strata: keyboard blueprint problems:\n  " + problems.joined(separator: "\n  ") + "\n").utf8))
             assertionFailure("invalid keyboard blueprint")
+        }
+        if let model = Self.launchModel {
+            let controller = VisualizerController(model: model)
+            controller.applyLaunchState(forceShow: CommandLine.arguments.contains("--visualizer"))
+            visualizer = controller
         }
         if CommandLine.arguments.contains("--editor") {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
@@ -78,6 +88,10 @@ final class GUIAppDelegate: NSObject, NSApplicationDelegate {
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
         NotificationCenter.default.post(name: .strataOpenEditor, object: nil)
         return false
+    }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        Self.launchModel?.setKeyStream(false)
     }
 }
 

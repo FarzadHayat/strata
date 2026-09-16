@@ -40,7 +40,18 @@ final class AppModel {
     var onboardingDismissed = false
     private(set) var isLearning = false
 
-    @ObservationIgnored private var client: IPCClient?
+    // MARK: Visualizer (live key stream; handled in Visualizer/AppModel+Visualizer.swift)
+
+    let visualizerSettings = VisualizerSettings()
+    /// `defsrc` positions currently held down (only while the key stream is on).
+    var pressedPositions: Set<Int> = []
+    /// The last few pressed keys, newest last.
+    var recentKeys: [RecentKey] = []
+    @ObservationIgnored var keyStreamEnabled = false
+    @ObservationIgnored var pressedAt: [Int: Date] = [:]
+    @ObservationIgnored var keySweepTask: Task<Void, Never>?
+
+    @ObservationIgnored var client: IPCClient?
     @ObservationIgnored private var learnHandler: ((String) -> Void)?
     @ObservationIgnored private var localMonitor: Any?
     @ObservationIgnored private var lastDaemonLoad: Date?
@@ -176,9 +187,11 @@ final class AppModel {
             client?.send(.status)
             lastSentSnapshot = nil
             sendPermissionSnapshot()
+            if keyStreamEnabled { client?.send(.subscribeKeys(true)) }
         } else {
             status = nil
             activeLayers = []
+            clearPressedKeys()
             if isLearning { installLocalMonitor() }
         }
     }
@@ -196,6 +209,8 @@ final class AppModel {
             activeLayers = active
         case .learned(let key, _, _):
             finishLearn(key)
+        case .key(let name, _, _, let down, let position):
+            keyEvent(name: name, down: down, position: position)
         case .log:
             break
         }

@@ -6,6 +6,7 @@ import SwiftUI
 struct MenuBarView: View {
     var model: AppModel
     @Environment(\.openWindow) private var openWindow
+    @State private var visualizerOptionsExpanded = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -15,6 +16,8 @@ struct MenuBarView: View {
             configStatus
             Divider()
             buttons
+            Divider()
+            visualizerSection
             Divider()
             footer
         }
@@ -95,6 +98,20 @@ struct MenuBarView: View {
         .controlSize(.small)
     }
 
+    private var visualizerSection: some View {
+        let settings = model.visualizerSettings
+        return VStack(alignment: .leading, spacing: 6) {
+            Toggle("Show keyboard visualizer", isOn: Bindable(settings).enabled)
+                .toggleStyle(.switch)
+            DisclosureGroup("Visualizer options", isExpanded: $visualizerOptionsExpanded) {
+                VisualizerOptions(settings: settings).padding(.top, 4)
+            }
+            .font(.caption)
+            .disabled(!settings.enabled)
+        }
+        .controlSize(.small)
+    }
+
     private var footer: some View {
         HStack {
             Text("Strata \(StrataCore.version)")
@@ -135,5 +152,29 @@ extension AppModel {
         guard let result = compileResult else { return ("Not loaded", true, 0) }
         if let error = result.errors.first { return (error.description, true, result.warnings.count) }
         return ("OK (\(layerNames.count) layer\(layerNames.count == 1 ? "" : "s")) — daemon offline", false, result.warnings.count)
+    }
+}
+
+/// Corner, opacity, click-through and position reset for the visualizer panel.
+struct VisualizerOptions: View {
+    @Bindable var settings: VisualizerSettings
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Picker("Corner", selection: $settings.corner) {
+                ForEach(VisualizerCorner.allCases) { Text($0.title).tag($0) }
+            }
+            HStack {
+                Text("Opacity")
+                Slider(value: $settings.opacity, in: VisualizerSettings.opacityRange)
+                Text(settings.opacity, format: .percent.precision(.fractionLength(0)))
+                    .monospacedDigit().foregroundStyle(.secondary).frame(width: 34, alignment: .trailing)
+            }
+            Toggle("Click-through (ignore mouse)", isOn: $settings.clickThrough)
+            Button("Reset position") { settings.resetPosition() }
+                .disabled(settings.customFrame == nil)
+                .help("Snap the panel back to the chosen corner")
+        }
+        .font(.caption)
     }
 }

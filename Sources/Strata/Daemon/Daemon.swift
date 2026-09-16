@@ -37,6 +37,8 @@ final class Daemon: @unchecked Sendable {
     private var guiPermissions: IPC.PermissionSnapshot?
     private var paused = false
     private var learning = false
+    private var streamKeys = false
+    private var positions: [HIDKey: Int] = [:]
     private var physicallyHeld = Set<HIDKey>()
     private var hadPermissionFailure = false
     private var permissionRetryTick = 0
@@ -129,6 +131,7 @@ final class Daemon: @unchecked Sendable {
         configStatus.warnings = result.warnings.map { $0.description(filename: file) }
         if let keymap = result.keymap, !result.hasErrors {
             let outputs = engine.load(keymap)
+            positions = keymap.positionByKey
             emit(outputs)
             configStatus.loaded = true
             configStatus.errors = []
@@ -155,6 +158,12 @@ final class Daemon: @unchecked Sendable {
 
     private func process(_ event: KeyEvent) {
         if event.isDown { physicallyHeld.insert(event.key) } else { physicallyHeld.remove(event.key) }
+
+        if streamKeys {
+            ipc.broadcast(.key(name: KeyTable.canonicalName(for: event.key) ?? event.key.description,
+                               page: event.key.page, usage: event.key.usage, down: event.isDown,
+                               position: positions[event.key]))
+        }
 
         if learning && event.isDown {
             learning = false
@@ -281,6 +290,9 @@ final class Daemon: @unchecked Sendable {
         case .learn: learning = true
         case .cancelLearn: learning = false
         case .permissions(let snap): guiPermissions = snap; broadcastStatus()
+        case .subscribeKeys(let on):
+            streamKeys = on
+            info(on ? "key stream enabled (visualizer)" : "key stream disabled")
         }
     }
 
