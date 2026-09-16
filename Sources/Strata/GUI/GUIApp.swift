@@ -29,9 +29,16 @@ struct GUIApp: App {
     }
 }
 
+extension Notification.Name {
+    /// Posted to open the editor window from outside SwiftUI (launch flag `--editor`, or `open -a Strata` reopen).
+    static let strataOpenEditor = Notification.Name("dev.farzadhayat.strata.openEditor")
+}
+
 /// Menu bar icon plus the active layer name when it is not the base layer.
+/// Also the always-alive view that owns the `openWindow` action for external "open editor" requests.
 struct MenuBarLabel: View {
     var model: AppModel
+    @Environment(\.openWindow) private var openWindow
 
     var body: some View {
         HStack(spacing: 4) {
@@ -39,6 +46,10 @@ struct MenuBarLabel: View {
             if let layer = model.topLayer {
                 Text(layer)
             }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .strataOpenEditor)) { _ in
+            openWindow(id: EditorWindow.sceneID)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { WindowBringer.bringEditorFront() }
         }
     }
 }
@@ -56,10 +67,16 @@ final class GUIAppDelegate: NSObject, NSApplicationDelegate {
             FileHandle.standardError.write(Data(("strata: keyboard blueprint problems:\n  " + problems.joined(separator: "\n  ") + "\n").utf8))
             assertionFailure("invalid keyboard blueprint")
         }
+        if CommandLine.arguments.contains("--editor") {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                NotificationCenter.default.post(name: .strataOpenEditor, object: nil)
+            }
+        }
     }
 
+    /// `open -a Strata` (or clicking the app in Finder) while running: show the editor.
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
-        WindowBringer.bringEditorFront()
+        NotificationCenter.default.post(name: .strataOpenEditor, object: nil)
         return false
     }
 }
