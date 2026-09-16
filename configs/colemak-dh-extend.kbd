@@ -1,0 +1,72 @@
+;; Strata keymap — Colemak-DH base layer, Caps-Lock-hold "extend" layer, numpad layer.
+;; Migrated from Farzad's kmonad config. Edit by hand or in the Strata editor; changes reload instantly.
+;;
+;; Grammar cheat sheet:
+;;   _            transparent: fall through to the layer below, ultimately the key's hardware default
+;;   XX           block the key
+;;   @name        use an alias from (defalias …)
+;;   M-c          chord: M- ⌘  C- ⌃  A- ⌥  S- ⇧  (RM- RC- RA- RS- for right-hand modifiers)
+;;   (tap-hold tap hold)             tap for one action, hold for another (timings from defcfg)
+;;   (layer-while-held name)         activate a layer while the key is held
+;;   (layer-switch name)             switch the base layer permanently
+
+(defcfg
+  tap-hold-resolution permissive   ;; permissive | hold-on-press | timeout
+  tap-timeout   200                ;; ms: re-press within this after a tap repeats the tap action
+  hold-timeout  200                ;; ms: held longer than this → hold action
+  prior-idle    120                ;; ms: pressed right after another key → always a tap (fast typing guard)
+  fn-row        system)            ;; system | media | function
+
+(defsrc
+  esc  f1   f2   f3   f4   f5   f6   f7   f8   f9   f10  f11  f12
+  grv  1    2    3    4    5    6    7    8    9    0    -    =    bspc
+  tab  q    w    e    r    t    y    u    i    o    p    [    ]    \
+  caps a    s    d    f    g    h    j    k    l    ;    '    ret
+  lsft z    x    c    v    b    n    m    ,    .    /    rsft up
+  fn   lctl lalt lmet           spc            rmet ralt left down right
+)
+
+(defalias
+  ext (tap-hold 200 150 esc (layer-while-held extend))   ;; tap: esc, hold: extend
+  num (layer-while-held numpad)
+
+  cpy M-c
+  pst M-v
+  cut M-x
+  udo M-z
+  all M-a
+  fnd M-f
+  bk  back
+  fw  forward
+)
+
+;; Base layer. Function row stays "_" so the MacBook's own F-key behaviour (brightness, media…) is preserved,
+;; including fn+F1 = F1. Letters are Colemak-DH on ANSI positions.
+(deflayer colemak-dh
+  _    _    _    _    _    _    _    _    _    _    _    _    _
+  _    1    2    3    4    5    6    7    8    9    0    -    =    _
+  _    q    w    f    p    b    j    l    u    y    ;    [    ]    \
+  @ext a    r    s    t    g    m    n    e    i    o    '    _
+  _    x    c    d    v    z    k    h    ,    .    /    _    _
+  _    lctl lalt lmet           _              rmet ralt _    _    _
+)
+
+;; Extend layer (hold caps): navigation + editing under the fingers.
+(deflayer extend
+  _    play rewind prev next eject refresh brdn brup www mail prog1 prog2
+  _    f1   f2   f3   f4   f5   f6   f7   f8   f9   f10  f11  f12  _
+  _    esc  @bk  @fnd @fw  ins  _    home up   end  menu prnt slck _
+  _    lalt lmet lsft lalt rctl pgup left down right bspc caps ret
+  _    @cut @cpy @pst tab  @udo pgdn del  lsft lctl menu _    _
+  _    _    @num _              ret            _    _    _    _    _
+)
+
+;; Numpad layer (hold caps + lalt).
+(deflayer numpad
+  _    _    _    _    _    _    _    _    _    _    _    _    _
+  _    _    _    _    _    _    _    _    /    *    -    _    _    _
+  _    _    _    _    _    _    _    7    8    9    +    _    _    _
+  _    _    _    _    _    _    _    4    5    6    ret  _    _
+  _    _    _    _    _    _    0    1    2    3    .    _    _
+  _    _    _    _              _              _    _    _    _    _
+)

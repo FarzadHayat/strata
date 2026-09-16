@@ -1,0 +1,41 @@
+;; Strata starter keymap — QWERTY base with a Caps-Lock-hold "extend" navigation layer.
+;; Hold Caps Lock: I/J/K/L = arrows, H = Home, ; = End, U/O = Page Up/Down, N = Backspace, M = Delete,
+;; Z/X/C/V = undo/cut/copy/paste, Space = Enter. Tap Caps Lock = Escape. Everything else unchanged.
+
+(defcfg
+  tap-hold-resolution permissive
+  tap-timeout   200
+  hold-timeout  200
+  prior-idle    120
+  fn-row        system)
+
+(defsrc
+  esc  f1   f2   f3   f4   f5   f6   f7   f8   f9   f10  f11  f12
+  grv  1    2    3    4    5    6    7    8    9    0    -    =    bspc
+  tab  q    w    e    r    t    y    u    i    o    p    [    ]    \
+  caps a    s    d    f    g    h    j    k    l    ;    '    ret
+  lsft z    x    c    v    b    n    m    ,    .    /    rsft up
+  fn   lctl lalt lmet           spc            rmet ralt left down right
+)
+
+(defalias
+  ext (tap-hold esc (layer-while-held extend))
+)
+
+(deflayer base
+  _    _    _    _    _    _    _    _    _    _    _    _    _
+  _    _    _    _    _    _    _    _    _    _    _    _    _    _
+  _    _    _    _    _    _    _    _    _    _    _    _    _    _
+  @ext _    _    _    _    _    _    _    _    _    _    _    _
+  _    _    _    _    _    _    _    _    _    _    _    _    _
+  _    _    _    _              _              _    _    _    _    _
+)
+
+(deflayer extend
+  _    _    _    _    _    _    _    _    _    _    _    _    _
+  _    f1   f2   f3   f4   f5   f6   f7   f8   f9   f10  f11  f12  _
+  _    _    _    _    _    _    _    pgup up   pgdn _    _    _    _
+  _    lalt lmet lsft lalt _    home left down right end  _    _
+  _    M-z  M-x  M-c  M-v  _    bspc del  _    _    _    _    _
+  _    _    _    _              ret            _    _    _    _    _
+)
