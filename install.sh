@@ -118,10 +118,15 @@ fi
 if [ -f "$VHID_PLIST" ]; then
   as_root xattr -d com.apple.quarantine "$VHID_PLIST" 2>/dev/null || true
   as_root xattr -dr com.apple.quarantine "/Library/Application Support/org.pqrs/Karabiner-DriverKit-VirtualHIDDevice/Applications" 2>/dev/null || true
-  # Kill ad-hoc copies (e.g. started with `sudo -n`), then let launchd own exactly one daemon.
-  as_root pkill -f "Karabiner-VirtualHIDDevice-Daemon|karabiner-vhidd" 2>/dev/null || true
-  as_root launchctl enable "system/$VHID_LABEL" 2>/dev/null || true
-  as_root launchctl bootstrap system "$VHID_PLIST" 2>/dev/null || as_root launchctl kickstart -k "system/$VHID_LABEL" 2>/dev/null || true
+  # launchd must own exactly one copy of the daemon. Kill ad-hoc copies (e.g. started with `sudo -n`) only when
+  # launchd is not already running it, so re-running the installer does not interrupt a working setup.
+  if [ "$DRY" = 1 ] || ! as_root launchctl print "system/$VHID_LABEL" 2>/dev/null | grep -q "state = running"; then
+    as_root pkill -f "Karabiner-VirtualHIDDevice-Daemon|karabiner-vhidd" 2>/dev/null || true
+    as_root launchctl enable "system/$VHID_LABEL" 2>/dev/null || true
+    as_root launchctl bootstrap system "$VHID_PLIST" 2>/dev/null || as_root launchctl kickstart -k "system/$VHID_LABEL" 2>/dev/null || true
+  else
+    echo "virtual keyboard daemon already running under launchd"
+  fi
 fi
 
 # ---------------------------------------------------------------- 3. kmonad / Karabiner conflicts
@@ -149,6 +154,7 @@ step "Installing $APP_DST"
 if [ -f "$APP_DST/Contents/MacOS/Strata" ]; then
   as_root launchctl bootout "system/$DAEMON_LABEL" 2>/dev/null || true
   as_user launchctl bootout "gui/$USER_UID/$AGENT_LABEL" 2>/dev/null || true
+  as_user pkill -f "Strata.app/Contents/MacOS/Strata\$" 2>/dev/null || true   # stale GUI instances
   as_root rm -rf "$APP_DST"
 fi
 as_root ditto "$APP_SRC" "$APP_DST"

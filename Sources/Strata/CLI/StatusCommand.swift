@@ -7,28 +7,26 @@ enum StatusCommand {
     static func run(args: [String]) -> Int32 {
         let json = args.contains("--json")
         let watch = args.contains("--watch")
-        let done = DispatchSemaphore(value: 0)
-        let box = ResultBox()
-        let client = IPCClient(onConnection: { connected in
-            if !connected && !watch { box.set(nil) ; done.signal() }
-        }, onEvent: { event in
+        // Deliver on a private queue: with dispatchMain() the main thread is gone, so the main queue must not be used.
+        let client = IPCClient(deliveryQueue: DispatchQueue(label: "strata.status"), onConnection: { _ in }, onEvent: { event in
             switch event {
             case .status(let s):
                 if json, let data = try? JSONEncoder.pretty.encode(s) { print(String(decoding: data, as: UTF8.self)) }
                 else { print(describe(s)) }
-                if !watch { box.set(s); done.signal() }
+                if !watch { exit(0) }
             case .layer(let names): if watch { print("layer: \(names.joined(separator: " > "))") }
             case .learned(let key, _, _): if watch { print("learned: \(key)") }
             case .log(let s): if watch { print("log: \(s)") }
             }
         })
         client.start()
-        if watch { dispatchMain() }
-        if done.wait(timeout: .now() + 3) == .timedOut {
-            FileHandle.standardError.write("no answer from the Strata daemon at \(IPC.socketPath(uid: getuid())) — is it running? (sudo launchctl print system/dev.farzadhayat.strata.daemon)\n".data(using: .utf8)!)
-            return 1
+        if !watch {
+            DispatchQueue.global().asyncAfter(deadline: .now() + 3) {
+                FileHandle.standardError.write("no answer from the Strata daemon at \(IPC.socketPath(uid: getuid())) — is it running? (sudo launchctl print system/dev.farzadhayat.strata.daemon)\n".data(using: .utf8)!)
+                exit(1)
+            }
         }
-        return box.get() == nil ? 1 : 0
+        dispatchMain()
     }
 
     static func describe(_ s: IPC.Status) -> String {
@@ -44,13 +42,6 @@ enum StatusCommand {
         out.append("active layer: \(s.activeLayers.joined(separator: " > "))")
         return out.joined(separator: "\n")
     }
-}
-
-final class ResultBox: @unchecked Sendable {
-    private var value: IPC.Status??
-    private let lock = NSLock()
-    func set(_ v: IPC.Status?) { lock.lock(); value = .some(v); lock.unlock() }
-    func get() -> IPC.Status? { lock.lock(); defer { lock.unlock() }; return value ?? nil }
 }
 
 extension JSONEncoder {

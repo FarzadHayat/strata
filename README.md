@@ -163,8 +163,10 @@ physical keyboard ──seized (IOKit, root)──▶ Strata daemon ──engine
 
 ## Build from source
 
-Requirements: macOS 14+, Swift 6 toolchain (Xcode Command Line Tools are enough to build; running the unit tests
-needs Xcode for XCTest — `make test` picks it up automatically if `/Applications/Xcode.app` exists).
+Requirements: macOS 14+ and **Xcode 16+** (the SwiftUI macros used by the editor and XCTest are only shipped
+inside Xcode, not the Command Line Tools). Xcode does not need to be the selected developer directory: the
+`Makefile` and `scripts/build-app.sh` export `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer`
+automatically when Xcode is installed. No `.xcodeproj` — everything is SwiftPM.
 
 ```bash
 git clone https://github.com/FarzadHayat/strata.git && cd strata

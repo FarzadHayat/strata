@@ -39,6 +39,7 @@ final class Daemon: @unchecked Sendable {
     private var learning = false
     private var physicallyHeld = Set<HIDKey>()
     private var hadPermissionFailure = false
+    private var permissionRetryTick = 0
     private var signalSources: [DispatchSourceSignal] = []
 
     init(options: Options) {
@@ -244,11 +245,13 @@ final class Daemon: @unchecked Sendable {
             let changed = p != self.permissions
             self.permissions = p
             if changed { self.info("permissions: inputMonitoring=\(p.inputMonitoring.rawValue) accessibility=\(p.accessibility)") }
-            if self.hadPermissionFailure && p.allGranted {
-                self.info("permissions granted — re-seizing keyboards")
-                self.hadPermissionFailure = false
+            // On macOS 26+ Accessibility alone may be enough for IOHIDDeviceOpen even while IOHIDCheckAccess still
+            // reports Input Monitoring as denied, so retry the seize on *any* change (and periodically while failing).
+            if self.hadPermissionFailure && (changed || self.permissionRetryTick % 5 == 0) {
+                self.info("retrying keyboard seize (permissions: inputMonitoring=\(p.inputMonitoring.rawValue) accessibility=\(p.accessibility))")
                 self.input.reseize()
             }
+            self.permissionRetryTick += 1
             if changed { self.broadcastStatus() }
         }
         t.resume()
@@ -285,8 +288,8 @@ final class Daemon: @unchecked Sendable {
         let names = engine.activeLayers.map { engine.keymap.layers.indices.contains($0) ? engine.keymap.layers[$0].name : "?" }
         let status = IPC.Status(
             version: StrataCore.version, daemonPID: getpid(), uptime: Date().timeIntervalSince(startDate),
-            permissions: guiPermissions ?? IPC.PermissionSnapshot(inputMonitoring: permissions.inputMonitoring.rawValue, accessibility: permissions.accessibility),
-            driverActivated: Permissions.virtualHIDDriverActivated(),
+            permissions: IPC.PermissionSnapshot(inputMonitoring: permissions.inputMonitoring.rawValue, accessibility: permissions.accessibility),
+            guiPermissions: guiPermissions, driverActivated: Permissions.virtualHIDDriverActivated(),
             vhidConnected: vhidStatus.connected, vhidReady: vhidStatus.keyboardReady, vhidError: vhidStatus.lastError,
             devices: devices.map { IPC.DeviceStatus(id: $0.id, name: $0.product, seized: $0.seized, note: $0.error) },
             config: configStatus, activeLayers: names, paused: paused)

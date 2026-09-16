@@ -1,7 +1,8 @@
 import Foundation
 import StrataCore
 
-/// GUI side: connects to the daemon's per-user socket, auto-reconnects, delivers events on the main queue.
+/// GUI side: connects to the daemon's per-user socket, auto-reconnects, delivers events on `deliveryQueue`
+/// (the main queue by default, which suits SwiftUI; command-line tools should pass their own queue).
 public final class IPCClient: @unchecked Sendable {
     private let queue = DispatchQueue(label: "dev.farzadhayat.strata.ipc.client")
     private var connection: LineConnection?
@@ -9,11 +10,14 @@ public final class IPCClient: @unchecked Sendable {
     private let path: String
     private let onEvent: @Sendable (IPC.Event) -> Void
     private let onConnection: @Sendable (Bool) -> Void
+    private let delivery: DispatchQueue
     private var stopped = false
 
-    public init(uid: uid_t = getuid(), onConnection: @escaping @Sendable (Bool) -> Void,
+    public init(uid: uid_t = getuid(), deliveryQueue: DispatchQueue = .main,
+                onConnection: @escaping @Sendable (Bool) -> Void,
                 onEvent: @escaping @Sendable (IPC.Event) -> Void) {
         self.path = IPC.socketPath(uid: uid)
+        self.delivery = deliveryQueue
         self.onEvent = onEvent
         self.onConnection = onConnection
     }
@@ -47,17 +51,17 @@ public final class IPCClient: @unchecked Sendable {
         let conn = LineConnection(fd: fd, queue: queue)
         conn.onLine = { [weak self] line in
             guard let self, let ev = try? IPC.decode(IPC.Event.self, from: line) else { return }
-            DispatchQueue.main.async { self.onEvent(ev) }
+            self.delivery.async { self.onEvent(ev) }
         }
         conn.onClose = { [weak self] in
             guard let self else { return }
             self.connection = nil
-            DispatchQueue.main.async { self.onConnection(false) }
+            self.delivery.async { self.onConnection(false) }
             self.scheduleReconnect()
         }
         connection = conn
         conn.start()
-        DispatchQueue.main.async { self.onConnection(true) }
+        self.delivery.async { self.onConnection(true) }
     }
 
     private func scheduleReconnect() {

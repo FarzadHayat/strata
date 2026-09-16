@@ -64,7 +64,10 @@ public enum IPC {
         public var version: String
         public var daemonPID: Int32
         public var uptime: TimeInterval
+        /// What the daemon itself observes (this is what decides whether seizing works).
         public var permissions: PermissionSnapshot
+        /// What the GUI process last reported, if any (same bundle, so normally identical once TCC settles).
+        public var guiPermissions: PermissionSnapshot?
         public var driverActivated: Bool
         public var vhidConnected: Bool
         public var vhidReady: Bool
@@ -74,10 +77,10 @@ public enum IPC {
         public var activeLayers: [String]
         public var paused: Bool
         public init(version: String, daemonPID: Int32, uptime: TimeInterval, permissions: PermissionSnapshot,
-                    driverActivated: Bool, vhidConnected: Bool, vhidReady: Bool, vhidError: String?,
+                    guiPermissions: PermissionSnapshot? = nil, driverActivated: Bool, vhidConnected: Bool, vhidReady: Bool, vhidError: String?,
                     devices: [DeviceStatus], config: ConfigStatus, activeLayers: [String], paused: Bool) {
             self.version = version; self.daemonPID = daemonPID; self.uptime = uptime; self.permissions = permissions
-            self.driverActivated = driverActivated; self.vhidConnected = vhidConnected; self.vhidReady = vhidReady
+            self.guiPermissions = guiPermissions; self.driverActivated = driverActivated; self.vhidConnected = vhidConnected; self.vhidReady = vhidReady
             self.vhidError = vhidError; self.devices = devices; self.config = config; self.activeLayers = activeLayers
             self.paused = paused
         }
