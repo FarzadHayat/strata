@@ -71,6 +71,10 @@ struct KeyCapView: View {
         }
         .contentShape(RoundedRectangle(cornerRadius: unit * 0.12))
         .opacity(display == nil ? 0.35 : 1)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text(physicalLabel))
+        .accessibilityValue(Text(display?.text ?? "not in defsrc"))
+        .accessibilityAddTraits(selected ? .isSelected : [])
     }
 
     private var fill: Color {
