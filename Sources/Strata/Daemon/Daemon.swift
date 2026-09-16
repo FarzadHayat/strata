@@ -147,11 +147,13 @@ final class Daemon: @unchecked Sendable {
         broadcastStatus()
     }
 
+    /// Config must live under `~user/.config/strata` by path. Symlinks inside that tree (e.g. GNU stow
+    /// dotfiles) are allowed; we do not resolve the file path, or stowed configs would look outside the dir.
     static func isAllowedConfigPath(_ path: String, user: String) -> Bool {
         guard let home = SystemPrefs.homeDirectory(forUser: user) else { return false }
-        let resolved = URL(fileURLWithPath: path).resolvingSymlinksInPath().path
-        let allowed = URL(fileURLWithPath: home + "/.config/strata").resolvingSymlinksInPath().path
-        return resolved.hasPrefix(allowed + "/")
+        let allowed = URL(fileURLWithPath: home + "/.config/strata", isDirectory: true).standardized.path
+        let candidate = URL(fileURLWithPath: path).standardized.path
+        return candidate == allowed || candidate.hasPrefix(allowed + "/")
     }
 
     // MARK: - Engine loop

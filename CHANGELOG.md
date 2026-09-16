@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.2.2 — 2026-09-17
+- Daemon: accept config paths under `~/.config/strata` when `keymap.kbd` is a symlink (GNU stow / dotfiles).
+
 ## 0.2.1 — 2026-09-17
 - Visualizer: corner picker snaps correctly again (clears stale dragged position; do not persist corner-snapped frames).
 - Visualizer: **Size** slider in menu bar options (260–720 pt); edge drag still works when click-through is off.
