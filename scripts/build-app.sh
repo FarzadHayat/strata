@@ -40,6 +40,10 @@ if [ ! -f "$OUT/AppIcon.icns" ]; then
   ICONSET="$(mktemp -d)/AppIcon.iconset"
   swift "$REPO/scripts/make-icon.swift" "$ICONSET" >/dev/null
   iconutil -c icns "$ICONSET" -o "$OUT/AppIcon.icns"
+  if command -v cwebp >/dev/null; then
+    cwebp -q 92 "$ICONSET/icon_512x512@2x.png" -o "$OUT/AppIcon.webp" >/dev/null
+    cwebp -q 92 "$ICONSET/icon_512x512@2x.png" -o "$REPO/docs/icon.webp" >/dev/null
+  fi
 fi
 cp "$OUT/AppIcon.icns" "$APP/Contents/Resources/AppIcon.icns"
 cp -R "$REPO/configs" "$APP/Contents/Resources/configs"
