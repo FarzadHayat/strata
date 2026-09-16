@@ -197,6 +197,7 @@ step "Done"
 cat <<MSG
 Strata is installed and will start at login.
   • The menu bar icon (⌨︎) shows status and opens the layout editor.
+  • Menu bar → "Show keyboard visualizer" for a live layer + key-press overlay (optional).
   • Config file: $CONFIG  (edit by hand or in the editor — changes apply instantly)
   • Logs: /var/log/strata/daemon.log
 
