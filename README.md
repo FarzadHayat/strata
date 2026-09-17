@@ -47,6 +47,26 @@ macOS 14+, Apple Silicon.
 Uninstall: `/Applications/Strata.app/Contents/Resources/uninstall.sh` (add `--purge` to delete the config,
 `--remove-driver` to remove the Karabiner driver too).
 
+## Screenshots
+
+**Menu bar** — status checklist, reload, and visualizer options.
+
+![Strata menu bar panel](docs/screenshots/menu-bar.png)
+
+**Visual editor** — Colemak-DH base layer and per-key inspector on the extend layer.
+
+*Base layer (colemak-dh)*
+
+![Editor: colemak-dh layer](docs/screenshots/editor-base.png)
+
+*Extend layer*
+
+![Editor: extend layer](docs/screenshots/editor-extend.png)
+
+**Live visualizer** — floating HUD with the active layer and effective bindings (extend shown).
+
+![Keyboard visualizer on the extend layer](docs/screenshots/visualizer-extend.png)
+
 ## The config file
 
 `~/.config/strata/keymap.kbd` uses a small S-expression dialect that kmonad/kanata users will recognise.
