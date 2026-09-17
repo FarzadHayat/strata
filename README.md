@@ -15,7 +15,7 @@ Keyboard Entry.
 - **Live visualizer**: an always-on-top corner panel showing the active layer, per-key bindings and key presses.
 - **Single-command install**, permission prompts on first launch, starts at login.
 
-<!-- screenshot: docs/editor.png -->
+![Strata — keyboard layers for macOS](docs/hero.png)
 
 ## Install
 
