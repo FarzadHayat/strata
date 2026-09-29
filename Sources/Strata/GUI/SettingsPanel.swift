@@ -1,4 +1,5 @@
 import StrataCore
+import StrataHID
 import SwiftUI
 
 /// `(defcfg …)` knobs and the alias list. Every control writes straight through `setSetting` / `setAlias`.
@@ -44,6 +45,8 @@ struct LayoutSettingsPanel: View {
                 }
                 Divider()
                 AliasesEditor(model: model)
+                Divider()
+                KeyboardsEditor(model: model)
             }
             .padding(6)
         }
@@ -133,6 +136,92 @@ struct AliasesEditor: View {
             }
             .textFieldStyle(.roundedBorder)
         }
+    }
+}
+
+/// One row of the Keyboards section: a product name, whether Strata currently remaps it, and why.
+private struct KeyboardRow: Identifiable {
+    let name: String
+    /// How many connected keyboards share this product name (toggling affects all of them).
+    let connectedCount: Int
+    let detail: String
+    let excluded: Bool
+    var id: String { name }
+}
+
+/// Per-keyboard on/off. Off writes the product name into `(defcfg exclude-devices …)`; the daemon picks
+/// the change up on its next config reload, no restart needed.
+struct KeyboardsEditor: View {
+    var model: AppModel
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Keyboards").font(.headline)
+            if model.compileResult?.keymap == nil {
+                Text("Fix the config errors first; keyboard switches are read from the compiled file.")
+                    .font(.caption).foregroundStyle(.secondary)
+            } else if rows.isEmpty {
+                Text("No keyboards found yet.").font(.caption).foregroundStyle(.secondary)
+            } else {
+                ForEach(rows) { row in
+                    Toggle(isOn: Binding(
+                        get: { !row.excluded },
+                        set: { model.setDeviceExcluded(name: row.name, excluded: !$0) })) {
+                        HStack(spacing: 6) {
+                            Text(row.name).lineLimit(1).truncationMode(.middle)
+                            if row.connectedCount > 1 {
+                                Text("\(row.connectedCount) connected").font(.caption).foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                    .disabled(model.document == nil)
+                    .help(row.excluded ? "Strata ignores this keyboard; turn on to remap it again."
+                                       : "Turn off to let this keyboard bypass Strata.")
+                    Text(row.detail).font(.caption).foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            if model.status == nil, model.compileResult?.keymap != nil {
+                Label("Daemon not connected; changes are saved and apply when it reconnects.", systemImage: "info.circle")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    /// Connected keyboards plus config entries for keyboards that are not plugged in, so an exclusion can
+    /// always be turned back on. Identical product names collapse into one row.
+    private var rows: [KeyboardRow] {
+        var connected: [String: (count: Int, seized: Bool, note: String?)] = [:]
+        for device in model.status?.devices ?? [] where !device.name.isEmpty {
+            let note = device.note
+            let skipped = note?.hasPrefix("skipped:") == true && note != HIDInput.excludedNote
+            guard !skipped && (device.seized || note != nil) else { continue }
+            var entry = connected[device.name] ?? (0, false, nil)
+            entry.count += 1
+            entry.seized = entry.seized || device.seized
+            entry.note = entry.note ?? note
+            connected[device.name] = entry
+        }
+
+        var out: [KeyboardRow] = connected.map { name, entry in
+            let excluded = DeviceExclusions.matches(product: name, excludes: model.excludedDeviceNames)
+            let detail: String
+            if excluded {
+                detail = "Strata ignores this keyboard."
+            } else if entry.seized {
+                detail = "Strata remaps this keyboard."
+            } else {
+                detail = entry.note.map { "Not seized: \($0)" } ?? "Not seized."
+            }
+            return KeyboardRow(name: name, connectedCount: entry.count, detail: detail, excluded: excluded)
+        }
+        for name in model.excludedDeviceNames where !name.isEmpty
+            && !out.contains(where: { $0.name.caseInsensitiveCompare(name) == .orderedSame }) {
+            out.append(KeyboardRow(name: name, connectedCount: 0,
+                                   detail: model.status == nil ? "Status unknown (daemon not connected)." : "Not connected.",
+                                   excluded: true))
+        }
+        return out.sorted { ($0.connectedCount == 0 ? 1 : 0, $0.name.lowercased()) < ($1.connectedCount == 0 ? 1 : 0, $1.name.lowercased()) }
     }
 }
 

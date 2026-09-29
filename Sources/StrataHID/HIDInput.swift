@@ -23,10 +23,12 @@ public struct HIDDeviceInfo: Sendable, Equatable, Identifiable {
 /// `IOServiceAddMatchingNotification` so hot-plug and wake re-enumeration are handled; each device is
 /// opened with `kIOHIDOptionsTypeSeizeDevice` so macOS no longer sees its events directly.
 public final class HIDInput: @unchecked Sendable {
+    /// `error` note on devices skipped because of `(defcfg exclude-devices …)`.
+    public static let excludedNote = "skipped: excluded by config"
     public struct Options: Sendable {
         /// Additional (usagePage, usage) pairs to match besides the keyboard {1,6}.
         public var extraUsagePairs: [(Int, Int)] = []
-        /// Product-name substrings to skip (case-insensitive).
+        /// Product names to skip (exact, case-insensitive — see `DeviceExclusions`).
         public var excludeProducts: [String] = []
         /// When false, devices are opened without seizing (observe only) — used by the probe.
         public var seize = true
@@ -39,6 +41,10 @@ public final class HIDInput: @unchecked Sendable {
     public typealias DeviceHandler = @Sendable ([HIDDeviceInfo]) -> Void
 
     private let options: Options
+    /// Current exclusion list; guarded by `lock` (`setExcludedProducts` may be called off the run loop).
+    private var excludes: [String]
+
+    private var excludeList: [String] { lock.lock(); defer { lock.unlock() }; return excludes }
     private let onEvent: EventHandler
     private let onDevices: DeviceHandler
     private var thread: Thread?
@@ -53,6 +59,7 @@ public final class HIDInput: @unchecked Sendable {
 
     public init(options: Options = Options(), onDevices: @escaping DeviceHandler, onEvent: @escaping EventHandler) {
         self.options = options
+        self.excludes = options.excludeProducts
         self.onEvent = onEvent
         self.onDevices = onDevices
     }
@@ -109,7 +116,44 @@ public final class HIDInput: @unchecked Sendable {
         CFRunLoopWakeUp(rl)
     }
 
+    /// Update the exclusion list without restarting: keyboards that now match are released back to macOS,
+    /// and keyboards that no longer match are opened and seized. Runs on the run-loop thread.
+    /// `completion` fires on that thread once devices have been closed/opened, so the caller can drain any
+    /// key events that were already in flight from a just-released keyboard.
+    public func setExcludedProducts(_ products: [String], completion: (@Sendable () -> Void)? = nil) {
+        lock.lock()
+        excludes = products
+        lock.unlock()
+        guard let rl = runLoop else { completion?(); return }
+        CFRunLoopPerformBlock(rl, CFRunLoopMode.defaultMode.rawValue) { [self] in
+            for (id, info) in self.infos
+            where self.devices[id] != nil && DeviceExclusions.matches(product: info.product, excludes: self.excludeList) {
+                self.close(id: id, error: Self.excludedNote)
+            }
+            // Re-enumerate so keyboards that are no longer excluded get opened. `open` ignores
+            // devices that are still open, and applies the new list to the rest.
+            var iterator: io_iterator_t = 0
+            if IOServiceGetMatchingServices(kIOMainPortDefault, self.matchingDictionary() as CFDictionary, &iterator) == kIOReturnSuccess {
+                self.drain(iterator: iterator, matched: true)
+                IOObjectRelease(iterator)
+            } else {
+                self.onDevices(self.deviceList)
+            }
+            completion?()
+        }
+        CFRunLoopWakeUp(rl)
+    }
+
     // MARK: - Run loop thread
+
+    /// The IOHIDDevice matching dictionary: keyboard {1,6} plus any extra usage pairs.
+    private func matchingDictionary() -> NSMutableDictionary {
+        var pairs: [[String: Int]] = [[kIOHIDDeviceUsagePageKey: 1, kIOHIDDeviceUsageKey: 6]]
+        for (p, u) in options.extraUsagePairs { pairs.append([kIOHIDDeviceUsagePageKey: p, kIOHIDDeviceUsageKey: u]) }
+        let matching = IOServiceMatching(kIOHIDDeviceKey)! as NSMutableDictionary
+        matching[kIOHIDDeviceUsagePairsKey] = pairs
+        return matching
+    }
 
     private func threadMain() {
         runLoop = CFRunLoopGetCurrent()
@@ -118,11 +162,7 @@ public final class HIDInput: @unchecked Sendable {
         let source = IONotificationPortGetRunLoopSource(port).takeUnretainedValue()
         CFRunLoopAddSource(runLoop, source, .defaultMode)
 
-        var pairs: [[String: Int]] = [[kIOHIDDeviceUsagePageKey: 1, kIOHIDDeviceUsageKey: 6]]
-        for (p, u) in options.extraUsagePairs { pairs.append([kIOHIDDeviceUsagePageKey: p, kIOHIDDeviceUsageKey: u]) }
-        let matching = IOServiceMatching(kIOHIDDeviceKey)! as NSMutableDictionary
-        matching[kIOHIDDeviceUsagePairsKey] = pairs
-
+        let matching = matchingDictionary()
         let selfPtr = Unmanaged.passUnretained(self).toOpaque()
         let matchedCB: IOServiceMatchingCallback = { refcon, iterator in
             let me = Unmanaged<HIDInput>.fromOpaque(refcon!).takeUnretainedValue()
@@ -155,6 +195,10 @@ public final class HIDInput: @unchecked Sendable {
     }
 
     private func open(service: io_service_t, id: UInt64) {
+        lock.lock()
+        let alreadyOpen = devices[id] != nil
+        lock.unlock()
+        guard !alreadyOpen else { return }
         guard let device = IOHIDDeviceCreate(kCFAllocatorDefault, service) else { return }
         func str(_ key: String) -> String {
             (IOHIDDeviceGetProperty(device, key as CFString) as? String)?.split(separator: "\0").first.map(String.init) ?? ""
@@ -170,8 +214,8 @@ public final class HIDInput: @unchecked Sendable {
             info.error = "skipped: own virtual device"
         } else if lowerProduct.contains("sidecar") {
             info.error = "skipped: sidecar virtual keyboard"
-        } else if options.excludeProducts.contains(where: { lowerProduct.contains($0.lowercased()) }) {
-            info.error = "skipped: excluded by config"
+        } else if DeviceExclusions.matches(product: info.product, excludes: excludeList) {
+            info.error = Self.excludedNote
         } else if info.usagePage == 1 && info.usage == 2 {
             info.error = "skipped: pointing device"
         }
@@ -200,10 +244,18 @@ public final class HIDInput: @unchecked Sendable {
         lock.unlock()
     }
 
-    private func close(id: UInt64) {
+    /// Closes a device. With `error`, the device stays in the list as skipped with that note (used when a
+    /// keyboard becomes excluded); otherwise it is forgotten entirely.
+    private func close(id: UInt64, error: String? = nil) {
         lock.lock()
         let device = devices.removeValue(forKey: id)
-        infos.removeValue(forKey: id)
+        if let error, var info = infos[id] {
+            info.seized = false
+            info.error = error
+            infos[id] = info
+        } else {
+            infos.removeValue(forKey: id)
+        }
         lock.unlock()
         guard let device else { return }
         IOHIDDeviceRegisterInputValueCallback(device, nil, nil)

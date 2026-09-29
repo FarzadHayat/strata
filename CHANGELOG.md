@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+- Keyboards panel (Layout settings): turn Strata on or off per keyboard. Off writes the product name to
+  `exclude-devices` and takes effect immediately — no daemon restart; the keyboard works normally again.
+- `exclude-devices` entries now match a keyboard's whole product name (case-insensitive), not a substring, so
+  disabling “Keychron K2” no longer also disables “Keychron K2 Pro”. Update partial names in existing configs.
+
 ## 0.2.2 — 2026-09-17
 - Daemon: accept config paths under `~/.config/strata` when `keymap.kbd` is a symlink (GNU stow / dotfiles).
 

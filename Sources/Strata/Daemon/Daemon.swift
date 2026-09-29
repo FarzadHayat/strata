@@ -35,6 +35,7 @@ final class Daemon: @unchecked Sendable {
     private var configStatus: IPC.ConfigStatus
     private var permissions = Permissions.check()
     private var guiPermissions: IPC.PermissionSnapshot?
+    private var currentExcludes: [String] = []
     private var paused = false
     private var learning = false
     private var streamKeys = false
@@ -76,7 +77,8 @@ final class Daemon: @unchecked Sendable {
 
         // Input.
         var hidOptions = HIDInput.Options()
-        hidOptions.excludeProducts = engine.keymap.settings.excludeDevices
+        currentExcludes = engine.keymap.settings.excludeDevices
+        hidOptions.excludeProducts = currentExcludes
         input = HIDInput(options: hidOptions, onDevices: { [weak self] list in
             self?.queue.async { self?.devicesChanged(list) }
         }, onEvent: { [weak self] event, _ in
@@ -133,6 +135,7 @@ final class Daemon: @unchecked Sendable {
             let outputs = engine.load(keymap)
             positions = keymap.positionByKey
             emit(outputs)
+            applyExclusions(keymap.settings.excludeDevices)
             configStatus.loaded = true
             configStatus.errors = []
             configStatus.layers = keymap.layers.map(\.name)
@@ -145,6 +148,26 @@ final class Daemon: @unchecked Sendable {
             for e in configStatus.errors { warn(e) }
         }
         broadcastStatus()
+    }
+
+    /// Applies `exclude-devices` live: releases keyboards that just became excluded, seizes keyboards that
+    /// are no longer excluded. Runs after the keymap loads; before the input device exists it is a no-op
+    /// (startup passes the list to `HIDInput.Options` instead).
+    private func applyExclusions(_ excludes: [String]) {
+        guard input != nil, excludes != currentExcludes else { return }
+        currentExcludes = excludes
+        info("keyboard exclusions changed: \(excludes.isEmpty ? "none" : excludes.joined(separator: ", "))")
+        releaseHeldKeys()
+        // A key event from a now-released keyboard may already be queued behind this call; release again
+        // once the devices are actually closed, so it cannot leave a stuck output.
+        input.setExcludedProducts(excludes) { [weak self] in self?.queue.async { self?.releaseHeldKeys() } }
+    }
+
+    /// Drops every key the engine or virtual keyboard still holds.
+    private func releaseHeldKeys() {
+        emit(engine.releaseAll())
+        vhid.releaseAll()
+        physicallyHeld.removeAll()
     }
 
     /// Config must live under `~user/.config/strata` by path. Symlinks inside that tree (e.g. GNU stow

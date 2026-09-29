@@ -113,6 +113,21 @@ extension AppModel {
         apply { $0.setSetting(key: key, to: text) }
     }
 
+    /// Product names that are currently excluded from remapping (from the compiled `exclude-devices`).
+    var excludedDeviceNames: [String] { settings.excludeDevices }
+
+    /// Turns Strata on or off for one keyboard by rewriting `exclude-devices`. Off appends the exact
+    /// product name; on removes every entry that names it (case-insensitively).
+    func setDeviceExcluded(name: String, excluded: Bool) {
+        var names = excludedDeviceNames
+        if excluded {
+            if !DeviceExclusions.matches(product: name, excludes: names) { names.append(name) }
+        } else {
+            names.removeAll { $0.caseInsensitiveCompare(name) == .orderedSame }
+        }
+        setSetting("exclude-devices", to: Formatter.deviceList(names))
+    }
+
     func setAlias(_ name: String, to text: String) {
         apply { $0.setAlias(name: name, to: text) }
     }

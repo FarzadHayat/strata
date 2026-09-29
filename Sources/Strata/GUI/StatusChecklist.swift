@@ -105,13 +105,17 @@ extension AppModel {
             help: "Connection from the daemon to the Karabiner virtual keyboard."))
 
         let devices = status?.devices ?? []
-        let seized = devices.filter(\.seized)
-        let seizedState: ChecklistItem.State = !connected ? .unknown : (seized.isEmpty ? (devices.isEmpty ? .unknown : .bad) : .ok)
-        let names = seized.isEmpty ? devices : seized
+        let excluded = devices.filter { $0.note == HIDInput.excludedNote }
+        let remappable = devices.filter { $0.note != HIDInput.excludedNote }
+        let seized = remappable.filter(\.seized)
+        let seizedState: ChecklistItem.State = !connected ? .unknown : (seized.isEmpty ? (remappable.isEmpty ? .unknown : .bad) : .ok)
+        let names = seized.isEmpty ? remappable : seized
+        let seizedNames = names.map { $0.name + ($0.seized ? "" : " (not seized" + ($0.note.map { ": " + $0 } ?? "") + ")") }.joined(separator: ", ")
+        let excludedNames = excluded.isEmpty ? "" : "Excluded by config: " + excluded.map(\.name).joined(separator: ", ")
+        let detail = [seizedNames, excludedNames].filter { !$0.isEmpty }.joined(separator: ". ")
         items.append(ChecklistItem(
             id: "devices", title: seized.isEmpty ? "Keyboards seized" : "Keyboards seized (\(seized.count))", state: seizedState,
-            detail: names.isEmpty ? (connected ? "No keyboards found." : nil)
-                : names.map { $0.name + ($0.seized ? "" : " (not seized" + ($0.note.map { ": " + $0 } ?? "") + ")") }.joined(separator: ", "),
+            detail: detail.isEmpty ? (connected ? "No keyboards found." : nil) : detail,
             help: "Physical keyboards the daemon has taken exclusive control of."))
         return items
     }

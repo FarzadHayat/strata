@@ -126,10 +126,16 @@ extension ConfigDocument {
     // MARK: - Settings
 
     /// Replaces the value of defcfg `key`, or appends `key value` to the first `defcfg`
-    /// (creating one at the top of the file if there is none).
+    /// (creating one at the top of the file if there is none). Duplicate pairs for the same key are
+    /// removed so the rewritten value is the only one the compiler sees.
     public func setSetting(key: String, to text: String) -> ConfigDocument {
-        if let pair = settingPairs.first(where: { $0.key.text.lowercased() == key.lowercased() }) {
-            return applying([alignedEdit(replacing: pair.value.range, with: text)])
+        let matches = settingPairs.filter { $0.key.text.lowercased() == key.lowercased() }
+        if let first = matches.first {
+            var edits = [alignedEdit(replacing: first.value.range, with: text)]
+            for pair in matches.dropFirst() {
+                edits.append(ByteEdit(range: removalStart(for: .atom(pair.key))..<pair.value.range.upperBound, replacement: ""))
+            }
+            return applying(edits)
         }
         if let form = tree.forms(named: "defcfg").first {
             return inserting(Self.pairInsertion(key, text, in: form), at: Self.appendOffset(in: form))

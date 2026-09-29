@@ -96,6 +96,14 @@ public enum Formatter {
         return GridLayout(rows: rows)
     }
 
+    /// A `(defcfg …)` value listing device names as strings, e.g. `("Keychron K2" "Magic Keyboard")`.
+    /// Backslashes and quotes inside a name are escaped for the config lexer. An empty list renders `()`.
+    public static func deviceList(_ names: [String]) -> String {
+        "(" + names.map { "\"" + $0.replacingOccurrences(of: "\\", with: "\\\\")
+                                  .replacingOccurrences(of: "\"", with: "\\\"") + "\"" }
+                .joined(separator: " ") + ")"
+    }
+
     /// The commented starter file: QWERTY base (caps → tap esc / hold `extend`) plus an `extend`
     /// navigation layer. `sourceKeys` are the physical keys to list in `defsrc`.
     public static func defaultConfig(sourceKeys: [String]) -> String {

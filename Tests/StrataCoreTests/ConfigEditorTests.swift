@@ -225,6 +225,17 @@ final class ConfigEditorTests: XCTestCase {
         XCTAssertEqual(inline.text, "(defcfg fn-row media tap-timeout 5)")
     }
 
+    func testSetSettingRemovesDuplicatePairs() {
+        let multiline = ConfigDocument(text: "(defcfg\n  exclude-devices (\"A\")\n  exclude-devices (\"B\")\n)\n(defsrc a)\n(deflayer base a)\n")
+        let edited = multiline.setSetting(key: "exclude-devices", to: "(\"C\")")
+        XCTAssertEqual(edited.text, "(defcfg\n  exclude-devices (\"C\")\n)\n(defsrc a)\n(deflayer base a)\n")
+        XCTAssertEqual(edited.compile().keymap?.settings.excludeDevices, ["C"])
+
+        let inline = ConfigDocument(text: "(defcfg exclude-devices (\"A\") exclude-devices (\"B\") tap-timeout 100)")
+        XCTAssertEqual(inline.setSetting(key: "exclude-devices", to: "(\"C\")").text,
+                       "(defcfg exclude-devices (\"C\") tap-timeout 100)")
+    }
+
     // MARK: - Aliases
 
     func testSetAliasReplaceAddAndCreate() {
